@@ -27,9 +27,10 @@ jobs:
         context: .
         file: ./Dockerfile.frontend
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/tm-frontend:latest
-        cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/tm-frontend:latest
-        cache-to: type=inline
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/tm-frontend:latest
+          ${{ secrets.DOCKER_USERNAME }}/tm-frontend:${{ github.sha }}
+        no-cache: true
     
     - name: Build and Push Backend
       uses: docker/build-push-action@v4
@@ -37,9 +38,10 @@ jobs:
         context: .
         file: ./Dockerfile.backend
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/tm-backend:latest
-        cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/tm-backend:latest
-        cache-to: type=inline
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/tm-backend:latest
+          ${{ secrets.DOCKER_USERNAME }}/tm-backend:${{ github.sha }}
+        no-cache: true
 
   deploy:
     needs: build-and-push
