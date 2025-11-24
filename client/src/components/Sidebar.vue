@@ -26,7 +26,7 @@ const authStore = useAuthStore()
 const { clearAllCaches } = useComponentCache()
 const { showSuccess, showError, showWarning, showInfo } = useGlobalNotifications()
 
-const appTitle = 'Teams Management'
+const appTitle = 'Teams Management (TEST)'
 
 const isLoggedIn = computed(() => authStore.isLoggedIn && authStore.user?.userId)
 
