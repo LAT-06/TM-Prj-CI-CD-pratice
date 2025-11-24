@@ -63,7 +63,7 @@ const showSidebar = computed(() => {
 
 // Landing page links for non-authenticated users
 const landingLinks = [
-  { title: 'Login', icon: 'mdi-login', to: '/login' },
+  { title: 'Login TEST CICD', icon: 'mdi-login', to: '/login' },
   { title: 'Sign Up', icon: 'mdi-account-plus', to: '/register' },
   { title: 'Docs', icon: 'mdi-book-open-variant', to: '/docs' },
 ]
