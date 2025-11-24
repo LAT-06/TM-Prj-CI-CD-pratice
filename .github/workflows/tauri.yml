@@ -1,0 +1,576 @@
+name: Build Tauri Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build for Windows'
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: 'Build for Linux'
+        required: false
+        default: false
+        type: boolean
+      build_macos:
+        description: 'Build for macOS'
+        required: false
+        default: false
+        type: boolean
+      create_release:
+        description: 'Create GitHub Release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build_windows:
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.build_windows == 'true'
+    runs-on: windows-latest
+    name: Build Tauri app (Windows)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-deps-windows-${{ hashFiles('client/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-deps-windows-
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: client/src-tauri/target
+          key: cargo-build-windows-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-${{ hashFiles('client/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            cargo-build-windows-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-
+            cargo-build-windows-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: bun-windows-${{ hashFiles('client/bun.lock') }}
+
+      - name: Install frontend dependencies
+        working-directory: client
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri app (Windows)
+        working-directory: client
+        env:
+          VITE_API_PORT: ${{ secrets.VITE_API_PORT }}
+          VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_DESKTOP_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_SECRET: ${{ secrets.VITE_DESKTOP_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_PASSWORD }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+        run: bunx --bun tauri build
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: client/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Remove Windows bundle files
+        run: |
+          Remove-Item -Recurse -Force client/src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Upload Windows signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-signature
+          path: client/src-tauri/target/release/bundle/nsis/*.sig
+          if-no-files-found: error
+
+      - name: Remove Windows signature files
+        run: |
+          Remove-Item -Recurse -Force client/src-tauri/target/release/bundle/nsis/*.sig
+
+  build_linux:
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.build_linux == 'true'
+    runs-on: ubuntu-latest
+    name: Build Tauri app (Linux)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-deps-linux-${{ hashFiles('client/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-deps-linux-
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: client/src-tauri/target
+          key: cargo-build-linux-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-${{ hashFiles('client/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            cargo-build-linux-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-
+            cargo-build-linux-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: bun-linux-${{ hashFiles('client/bun.lock') }}
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+      - name: Install frontend dependencies
+        working-directory: client
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri app (Linux)
+        working-directory: client
+        env:
+          VITE_API_PORT: ${{ secrets.VITE_API_PORT }}
+          VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_DESKTOP_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_SECRET: ${{ secrets.VITE_DESKTOP_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_PASSWORD }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+        run: bunx --bun tauri build
+
+      - name: Upload Linux RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm
+          path: client/src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+      - name: Remove Linux RPM files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/rpm/*.rpm
+
+      - name: Upload Linux RPM signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-signature
+          path: client/src-tauri/target/release/bundle/rpm/*.sig
+          if-no-files-found: error
+
+      - name: Remove Linux RPM signature files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/rpm/*.sig
+
+      - name: Upload Linux DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: client/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: ignore
+
+      - name: Remove Linux DEB files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/deb/*.deb
+
+      - name: Upload Linux DEB signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb-signature
+          path: client/src-tauri/target/release/bundle/deb/*.sig
+          if-no-files-found: error
+
+      - name: Remove Linux DEB signature files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/deb/*.sig
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: client/src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: ignore
+
+      - name: Remove Linux AppImage files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/appimage/*.AppImage
+
+      - name: Upload Linux AppImage signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage-signature
+          path: client/src-tauri/target/release/bundle/appimage/*.sig
+          if-no-files-found: error
+
+      - name: Remove Linux AppImage signature files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/appimage/*.sig
+
+  build_macos:
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.build_macos == 'true'
+    runs-on: macos-latest
+    name: Build Tauri app (macOS)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-deps-macos-${{ hashFiles('client/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-deps-macos-
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: client/src-tauri/target
+          key: cargo-build-macos-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-${{ hashFiles('client/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            cargo-build-macos-${{ hashFiles('client/src-tauri/src/**/*.rs') }}-
+            cargo-build-macos-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: bun-macos-${{ hashFiles('client/bun.lock') }}
+
+      - name: Install frontend dependencies
+        working-directory: client
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri app (macOS)
+        working-directory: client
+        env:
+          VITE_API_PORT: ${{ secrets.VITE_API_PORT }}
+          VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_DESKTOP_CLIENT_ID }}
+          VITE_DESKTOP_CLIENT_SECRET: ${{ secrets.VITE_DESKTOP_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_PASSWORD }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+        run: bunx --bun tauri build
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: client/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Remove macOS DMG files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Upload macOS signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-signature
+          path: client/src-tauri/target/release/bundle/macos/*.sig
+          if-no-files-found: error
+
+      - name: Remove macOS signature files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/macos/*.sig
+
+      - name: Upload macOS APP bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: client/src-tauri/target/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: ignore
+
+      - name: Remove macOS APP bundle files
+        run: |
+          rm -rf client/src-tauri/target/release/bundle/macos/*.app.tar.gz
+
+  create_release:
+    if: github.event.inputs.create_release == 'true'
+    needs: 
+      - build_windows
+      - build_linux  
+      - build_macos
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Get version from tauri.conf.json
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' client/src-tauri/tauri.conf.json)
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "raw_version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f -name "*" | sort
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          ASSETS_FOUND=false
+          
+          echo "Available artifacts:"
+          find artifacts -type f -name "*" | sort
+          echo ""
+          
+          # Windows files
+          if [ -d "artifacts/windows-installer" ]; then
+            echo "Processing Windows installer..."
+            if find artifacts/windows-installer -name "*.exe" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "Windows installer added"
+              ASSETS_FOUND=true
+            else
+              echo "No Windows exe found"
+            fi
+          else
+            echo "Windows installer artifacts not found"
+          fi
+          
+          # Linux files
+          if [ -d "artifacts/linux-rpm" ]; then
+            echo "Processing Linux RPM..."
+            if find artifacts/linux-rpm -name "*.rpm" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "Linux RPM added"
+              ASSETS_FOUND=true
+            else
+              echo "No Linux RPM found"
+            fi
+          else
+            echo "Linux RPM artifacts not found"
+          fi
+          
+          if [ -d "artifacts/linux-deb" ]; then
+            echo "Processing Linux DEB..."
+            if find artifacts/linux-deb -name "*.deb" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "Linux DEB added"
+              ASSETS_FOUND=true
+            else
+              echo "No Linux deb found"
+            fi
+          fi
+          
+          if [ -d "artifacts/linux-appimage" ]; then
+            echo "Processing Linux AppImage..."
+            if find artifacts/linux-appimage -name "*.AppImage" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "Linux AppImage added"
+              ASSETS_FOUND=true
+            else
+              echo "No Linux AppImage found"
+            fi
+          fi
+          
+          # macOS files
+          if [ -d "artifacts/macos-dmg" ]; then
+            echo "Processing macOS DMG..."
+            if find artifacts/macos-dmg -name "*.dmg" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "macOS DMG added"
+              ASSETS_FOUND=true
+            else
+              echo "No macOS dmg found"
+            fi
+          else
+            echo "macOS DMG artifacts not found"
+          fi
+
+          if [ -d "artifacts/macos-app" ]; then
+            echo "Processing macOS APP..."
+            if find artifacts/macos-app -name "*.app.tar.gz" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "macOS APP bundle added"
+              ASSETS_FOUND=true
+            else
+              echo "No macOS app bundle found"
+            fi
+          fi
+          
+          # Update JSON from Windows build (if available)
+          if [ -d "artifacts/tauri-update-json" ]; then
+            echo "Processing update JSON..."
+            if find artifacts/tauri-update-json -name "*.json" -exec cp {} release-assets/ \; 2>/dev/null; then
+              echo "Update JSON added"
+            else
+              echo "No update JSON found"
+            fi
+          fi
+          
+          echo ""
+          echo "Release assets prepared:"
+          ls -la release-assets/ 2>/dev/null || echo "No release assets directory created"
+          
+          # Check if we have any installer assets (allow release even if only some platforms built)
+          if [ "$ASSETS_FOUND" = "false" ]; then
+            echo "ERROR: No installer assets found! At least one platform must be built successfully."
+            exit 1
+          else
+            echo "Release assets ready - found at least one installer"
+          fi
+      
+      - name: Generate complete update JSON
+        run: |
+          VERSION="${{ steps.get_version.outputs.raw_version }}"
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          NOTES="Teams Management v${VERSION}"
+
+          # Get signatures from artifacts
+          WIN_SIG=$(find artifacts -name "*.sig" -path "*/windows-*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+          LINUX_SIG=$(find artifacts -name "*.sig" -path "*/linux-*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+          DEB_SIG=$(find artifacts -name "*.sig" -path "*/linux-deb*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+          APPIMAGE_SIG=$(find artifacts -name "*.sig" -path "*/linux-appimage*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+          MACOS_SIG=$(find artifacts -name "*.sig" -path "*/macos-*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+          APP_SIG=$(find artifacts -name "*.sig" -path "*/macos-app*" -exec cat {} \; 2>/dev/null | head -1 || echo "")
+
+          # Get actual filenames from release assets
+          WIN_FILE=$(find release-assets -name "*.exe" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_x64-setup.exe")
+          LINUX_FILE=$(find release-assets -name "*.rpm" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_x86_64.rpm")
+          DEB_FILE=$(find release-assets -name "*.deb" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_amd64.deb")
+          APPIMAGE_FILE=$(find release-assets -name "*.AppImage" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_x86_64.AppImage")
+          MACOS_FILE=$(find release-assets -name "*.dmg" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_x64.dmg")
+          APP_FILE=$(find release-assets -name "*.app.tar.gz" -printf "%f\n" 2>/dev/null | head -1 | sed 's/ /./g' || echo "your_app_arm64.app.tar.gz")
+
+          # Generate complete update JSON
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "$NOTES" \
+            --arg pub_date "$PUB_DATE" \
+            --arg win_sig "$WIN_SIG" \
+            --arg win_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${WIN_FILE}" \
+            --arg linux_sig "$LINUX_SIG" \
+            --arg linux_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${LINUX_FILE}" \
+            --arg deb_sig "$DEB_SIG" \
+            --arg deb_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${DEB_FILE}" \
+            --arg appimage_sig "$APPIMAGE_SIG" \
+            --arg appimage_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${APPIMAGE_FILE}" \
+            --arg macos_sig "$MACOS_SIG" \
+            --arg macos_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${MACOS_FILE}" \
+            --arg app_sig "$APP_SIG" \
+            --arg app_url "https://github.com/caphefalumi/TM-Project/releases/download/v${VERSION}/${APP_FILE}" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "windows-x86_64": {
+                  signature: $win_sig,
+                  url: $win_url
+                },
+                "linux-rpm-x86_64": {
+                  signature: $linux_sig,
+                  url: $linux_url
+                },
+                "linux-deb-x86_64": {
+                  signature: $deb_sig,
+                  url: $deb_url
+                },
+                "linux-appimage-x86_64": {
+                  signature: $appimage_sig,
+                  url: $appimage_url
+                },
+                "darwin-x86_64": {
+                  signature: $macos_sig,
+                  url: $app_url
+                },
+                "darwin-aarch64": {
+                  signature: $macos_sig,
+                  url: $macos_url
+                }
+              }
+            }' > release-assets/latest.json
+          cp release-assets/latest.json client/public/latest.json
+          echo "Generated update JSON:"
+          cat client/public/latest.json
+
+      - name: Generate release notes
+        id: generate_notes
+        run: |
+          VERSION="${{ steps.get_version.outputs.raw_version }}"
+          cat > release_notes.md << EOF
+          ## Teams Management v${VERSION}
+          EOF
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Teams Management ${{ steps.get_version.outputs.version }}
+          body_path: release_notes.md
+          draft: true
+          prerelease: false
+          files: |
+            release-assets/*
+            !release-assets/latest.json
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_BOT_TOKEN }}
+      - name: Commit and push latest.json to main branch
+        env:
+          GH_PAT: ${{ secrets.ACTIONS_BOT_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${GITHUB_REPOSITORY}.git
+          git add client/public/latest.json
+          git commit -m "chore: update latest.json for release v${{ steps.get_version.outputs.raw_version }}"
+          git push origin main
+      - name: Publish latest.json to vercel
+        working-directory: ./client
+        env:   
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_CLIENT_PROJECT_ID }}
+        run: npx vercel --prod --token=$VERCEL_TOKEN --yes
+
