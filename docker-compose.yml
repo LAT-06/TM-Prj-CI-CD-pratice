@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile.frontend
     ports:
       - "8080:80"
+    restart: unless-stopped
     depends_on:
       - backend
 
@@ -18,6 +19,8 @@ services:
       - "3000:3000"
     environment:
       DB_CONNECTION_STRING: "mongodb://database:27017/tm-project"
+      NODE_ENV: "production"
+    restart: unless-stopped
     depends_on:
       - database
 
@@ -27,6 +30,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    restart: unless-stopped
 
 volumes:
   mongo-data:
