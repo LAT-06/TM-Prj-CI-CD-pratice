@@ -76,7 +76,7 @@ const features = [
                 <span class="highlight-text">Management</span>
               </h1>
               <p class="hero-subtitle">
-                Just testing CICD pipeline deployment with GitHub Actions and Docker Compose
+                Just testing CICD pipeline deployment with GitHub Actions and Docker Compose LAT
               </p>
               <div class="hero-features">
                 <v-chip
